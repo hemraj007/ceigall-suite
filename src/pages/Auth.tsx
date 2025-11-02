@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { login, register, storeToken } from "@/lib/api/auth";
@@ -66,14 +67,16 @@ export default function Auth() {
     try {
       await register(registerData);
       
+      // Auto-login after successful registration
+      const loginResponse = await login(registerData.email, registerData.password);
+      storeToken(loginResponse.access_token);
+
       toast({
         title: "Registration successful",
-        description: "Please login with your credentials",
+        description: "You have been automatically logged in.",
       });
 
-      // Switch to login tab
-      const loginTab = document.querySelector('[value="login"]') as HTMLElement;
-      loginTab?.click();
+      navigate("/");
     } catch (error) {
       toast({
         title: "Registration failed",
@@ -178,25 +181,42 @@ export default function Auth() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="reg-designation">Designation</Label>
-                  <Input
-                    id="reg-designation"
-                    type="text"
-                    placeholder="Senior Legal Officer"
+                  <Select
+                    onValueChange={(value) => setRegisterData({ ...registerData, designation: value })}
                     value={registerData.designation}
-                    onChange={(e) => setRegisterData({ ...registerData, designation: e.target.value })}
                     required
-                  />
+                  >
+                    <SelectTrigger id="reg-designation">
+                      <SelectValue placeholder="Select a designation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Officer">Officer</SelectItem>
+                      <SelectItem value="Senior Officer">Senior Officer</SelectItem>
+                      <SelectItem value="Manager">Manager</SelectItem>
+                      <SelectItem value="Senior Manager">Senior Manager</SelectItem>
+                      <SelectItem value="Head of Department">Head of Department</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="reg-department">Department</Label>
-                  <Input
-                    id="reg-department"
-                    type="text"
-                    placeholder="Contracts & Legal"
+                  <Select
+                    onValueChange={(value) => setRegisterData({ ...registerData, department: value })}
                     value={registerData.department}
-                    onChange={(e) => setRegisterData({ ...registerData, department: e.target.value })}
                     required
-                  />
+                  >
+                    <SelectTrigger id="reg-department">
+                      <SelectValue placeholder="Select a department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Contracts & Legal">Contracts & Legal</SelectItem>
+                      <SelectItem value="Tender & Bidding">Tender & Bidding</SelectItem>
+                      <SelectItem value="Finance">Finance</SelectItem>
+                      <SelectItem value="Human Resources">Human Resources</SelectItem>
+                      <SelectItem value="Procurement">Procurement</SelectItem>
+                      <SelectItem value="IT">IT</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="reg-password">Password</Label>
