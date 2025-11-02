@@ -373,6 +373,28 @@ export const downloadDocument = async (documentId: string, filename: string) => 
 };
 
 /**
+ * Get a previewable URL for a document
+ */
+export const getDocumentPreviewUrl = async (documentId: string): Promise<string> => {
+  const response = await fetch(
+    `${API_BASE_URL}/dms/documents/${documentId}/download`,
+    {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch document for preview");
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  return url;
+};
+
+/**
  * Get document version history
  */
 export const getDocumentVersions = async (

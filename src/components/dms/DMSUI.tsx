@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { DocumentSummary, Document, Folder, AISummary, Category, ConfidentialityLevel } from "@/lib/types/dms";
-import { uploadFile, createFolder, downloadDocument, deleteDocument } from "@/lib/api/dms";
+import { uploadFile, createFolder, downloadDocument, deleteDocument, getDocumentPreviewUrl } from "@/lib/api/dms";
 import { 
   FileText, 
   Upload, 
@@ -148,6 +148,11 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
 
   const [createFolderDialog, setCreateFolderDialog] = useState<{ open: boolean; parentId?: string | null }>({ open: false });
   const [newFolderName, setNewFolderName] = useState('');
+  const [previewDialog, setPreviewDialog] = useState<{
+    open: boolean;
+    doc: Document | null;
+    url: string | null;
+  }>({ open: false, doc: null, url: null });
 
   // Mock AI summary data
   const mockAISummary: AISummary = {
@@ -267,6 +272,20 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
       toast({ title: "Error", description: "Failed to download document", variant: "destructive" });
     } finally {
       setIsDownloading(null);
+    }
+  };
+
+  const handlePreviewDocument = async (doc: Document) => {
+    toast({ title: "Generating preview..." });
+    try {
+      const previewUrl = await getDocumentPreviewUrl(doc.id);
+      setPreviewDialog({ open: true, doc: doc, url: previewUrl });
+    } catch (error) {
+      toast({
+        title: "Preview failed",
+        description: "Could not load document preview.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -680,7 +699,7 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
                           <Sparkles className="h-3 w-3" />
                           AI
                         </Button>
-                        <Button size="sm" variant="outline" className="h-7 w-7 p-0">
+                        <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => handlePreviewDocument(doc)}>
                           <Eye className="h-3 w-3" />
                         </Button>
                         <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => handleDownloadDocument(doc.id, doc.original_filename)} disabled={isDownloading === doc.id}>
@@ -735,7 +754,7 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
                               <Sparkles className="h-3.5 w-3.5" />
                               AI Summary
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => handlePreviewDocument(doc)}>
                               <Eye className="h-4 w-4" />
                             </Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => handleDownloadDocument(doc.id, doc.original_filename)} disabled={isDownloading === doc.id}>
@@ -1150,6 +1169,39 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
               Create Folder
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Document Preview Dialog */}
+      <Dialog
+        open={previewDialog.open}
+        onOpenChange={(open) => {
+          if (!open && previewDialog.url) {
+            window.URL.revokeObjectURL(previewDialog.url);
+          }
+          setPreviewDialog({ open, doc: open ? previewDialog.doc : null, url: open ? previewDialog.url : null });
+        }}
+      >
+        <DialogContent className="max-w-5xl h-[95vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{previewDialog.doc?.name}</DialogTitle>
+            <DialogDescription>
+              {previewDialog.doc?.original_filename} ({formatFileSize(previewDialog.doc?.size_bytes ?? 0)})
+            </DialogDescription>
+          </DialogHeader>
+          {previewDialog.url ? (
+            <div className="flex-1">
+              <iframe
+                src={previewDialog.url}
+                className="w-full h-full border-0 rounded-md"
+                title={previewDialog.doc?.name}
+              />
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <p>Loading preview...</p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
