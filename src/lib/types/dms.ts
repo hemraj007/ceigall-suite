@@ -66,23 +66,21 @@ export interface UploadURLRequest {
   filename: string;
   file_size: number;
   mime_type: string;
-  folder_id?: string;
+  folder_id: string;
   category_id?: string;
   tags?: string[];
   confidentiality_level: ConfidentialityLevel;
-  description?: string;
 }
 
 export interface UploadURLResponse {
-  upload_id: string;
-  presigned_url: string;
-  s3_bucket?: string;
-  s3_key?: string;
+  upload_url: string;
+  document_id: string;
+  storage_path: string;
+  expires_in: number;
 }
 
 export interface ConfirmUploadRequest {
-  upload_id: string;
-  s3_etag?: string;
+  s3_etag: string;
   s3_version_id?: string;
 }
 

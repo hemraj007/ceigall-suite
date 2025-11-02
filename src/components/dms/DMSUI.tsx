@@ -3,8 +3,10 @@
  * Features: Folder navigation, Grid/List views, Enhanced AI summary, Advanced search
  */
 
-import { useState } from "react";
+import { useState, useRef, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { DocumentSummary, Document, Folder, AISummary, Category } from "@/lib/types/dms";
+import { DocumentSummary, Document, Folder, AISummary, Category, ConfidentialityLevel } from "@/lib/types/dms";
+import { getUploadURL, uploadFileToS3, confirmUpload } from "@/lib/api/dms";
 import { 
   FileText, 
   Upload, 
@@ -115,6 +118,9 @@ const confidentialityColors = {
 
 export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root-1', 'root-2']));
@@ -126,6 +132,13 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
   const [sortBy, setSortBy] = useState('modified-desc');
   
   const [uploadDialog, setUploadDialog] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<Map<string, number>>(new Map());
+  const [uploadFolderId, setUploadFolderId] = useState<string | undefined>(undefined);
+  const [uploadConfidentiality, setUploadConfidentiality] = useState<ConfidentialityLevel>('internal');
+  const [uploadTags, setUploadTags] = useState('');
+  const [uploadDescription, setUploadDescription] = useState('');
+
   const [summaryDialog, setSummaryDialog] = useState<{ open: boolean; document: Document | null }>({
     open: false,
     document: null,
@@ -173,6 +186,63 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
 
   const handleAISummary = (doc: Document) => {
     setSummaryDialog({ open: true, document: doc });
+  };
+
+  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setUploadFiles(Array.from(e.target.files));
+    }
+  };
+
+  const handleUpload = async () => {
+    if (uploadFiles.length === 0) {
+      toast({ title: "No files selected", variant: "destructive" });
+      return;
+    }
+    if (!uploadFolderId) {
+      toast({ title: "Please select a folder", variant: "destructive" });
+      return;
+    }
+
+    const newUploadingFiles = new Map<string, number>();
+    uploadFiles.forEach(f => newUploadingFiles.set(f.name, 0));
+    setUploadingFiles(newUploadingFiles);
+
+    try {
+      for (const file of uploadFiles) {
+        const uploadUrlResponse = await getUploadURL({
+          filename: file.name,
+          file_size: file.size,
+          mime_type: file.type,
+          folder_id: uploadFolderId,
+          tags: uploadTags.split(',').map(t => t.trim()).filter(Boolean),
+          confidentiality_level: uploadConfidentiality,
+        });
+
+        const { etag, versionId } = await uploadFileToS3(
+          uploadUrlResponse.upload_url,
+          file,
+          (progress) => {
+            setUploadingFiles(prev => new Map(prev).set(file.name, progress));
+          }
+        );
+
+        await confirmUpload(uploadUrlResponse.document_id, {
+          s3_etag: etag,
+          s3_version_id: versionId,
+        });
+      }
+
+      toast({ title: "Files uploaded successfully" });
+      queryClient.invalidateQueries({ queryKey: ["dms-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["dms-summary"] });
+      setUploadDialog(false);
+      setUploadFiles([]);
+      setUploadingFiles(new Map());
+    } catch (error) {
+      toast({ title: "Error", description: "Upload failed", variant: "destructive" });
+      setUploadingFiles(new Map());
+    }
   };
 
   const toggleFolder = (folderId: string) => {
@@ -558,7 +628,7 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
                       </div>
                       
                       <h3 className="font-medium text-sm mb-1 line-clamp-2">{doc.name}</h3>
-                      <p className="text-xs text-muted-foreground mb-2">{formatFileSize(doc.size)}</p>
+                      <p className="text-xs text-muted-foreground mb-2">{formatFileSize(doc.size_bytes)}</p>
                       
                       <div className="flex items-center gap-1 mb-2">
                         <Badge variant="outline" className="text-xs">{doc.file_type.toUpperCase()}</Badge>
@@ -607,7 +677,7 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
                               <p className="font-medium truncate">{doc.name}</p>
                               <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 flex-wrap">
                                 <Badge variant="outline" className="text-xs shrink-0">{doc.file_type.toUpperCase()}</Badge>
-                                <span className="shrink-0">{formatFileSize(doc.size)}</span>
+                                <span className="shrink-0">{formatFileSize(doc.size_bytes)}</span>
                                 <span className="shrink-0">•</span>
                                 <span className="truncate">{doc.uploaded_by}</span>
                                 <span className="shrink-0">•</span>
@@ -708,68 +778,41 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
           
           <div className="space-y-4 py-4">
             {/* Drop Zone */}
-            <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} multiple className="hidden" />
+            <div 
+              className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
               <CloudUpload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="font-medium mb-1">Drop your documents here</h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                or click to browse files
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Supports PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, Images, CAD files, ZIP (max 100MB per file)
-              </p>
-              <Button variant="outline" className="mt-4">
-                Choose Files
-              </Button>
+              <h3 className="font-medium mb-1">Drop documents here or click to browse</h3>
+              <p className="text-xs text-muted-foreground">Max 100MB per file</p>
             </div>
-
+            
+            {uploadFiles.length > 0 && (
+              <div className="space-y-2">
+                <Label>Selected Files</Label>
+                <div className="space-y-2 max-h-32 overflow-y-auto p-2 border rounded-md">
+                  {uploadFiles.map((file, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span>{file.name}</span>
+                      <span>{formatFileSize(file.size)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             {/* Upload Configuration */}
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="doc-name">Document Name</Label>
-                <Input id="doc-name" placeholder="Enter document name" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="department">Department</Label>
-                  <Select defaultValue="tender">
-                    <SelectTrigger id="department">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover z-50">
-                      <SelectItem value="tender">Tender & Bidding</SelectItem>
-                      <SelectItem value="legal">Contracts & Legal</SelectItem>
-                      <SelectItem value="finance">Finance & Billing</SelectItem>
-                      <SelectItem value="hr">Human Resources</SelectItem>
-                      <SelectItem value="procurement">Procurement</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="folder">Folder</Label>
-                  <Select defaultValue="root-1">
-                    <SelectTrigger id="folder">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover z-50">
-                      {folders.map((folder) => (
-                        <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="categories">Categories (select multiple)</Label>
-                <Select defaultValue="contracts">
-                  <SelectTrigger id="categories">
-                    <SelectValue />
+                <Label htmlFor="folder">Folder *</Label>
+                <Select onValueChange={setUploadFolderId} value={uploadFolderId}>
+                  <SelectTrigger id="folder">
+                    <SelectValue placeholder="Select a folder..." />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    {folders.map((folder) => (
+                      <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -777,7 +820,7 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
 
               <div className="grid gap-2">
                 <Label htmlFor="confidentiality">Confidentiality Level</Label>
-                <Select defaultValue="internal">
+                <Select onValueChange={(v: ConfidentialityLevel) => setUploadConfidentiality(v)} defaultValue="internal">
                   <SelectTrigger id="confidentiality">
                     <SelectValue />
                   </SelectTrigger>
@@ -792,22 +835,38 @@ export function DMSUI({ summary, documents, folders, categories }: DMSUIProps) {
 
               <div className="grid gap-2">
                 <Label htmlFor="tags">Tags</Label>
-                <Input id="tags" placeholder="Add tags separated by commas" />
+                <Input id="tags" placeholder="Add tags separated by commas" value={uploadTags} onChange={e => setUploadTags(e.target.value)} />
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="description">Description (Optional)</Label>
-                <Textarea id="description" placeholder="Brief description of document content" rows={3} />
+                <Textarea id="description" placeholder="Brief description of document content" rows={3} value={uploadDescription} onChange={e => setUploadDescription(e.target.value)} />
               </div>
             </div>
 
+            {uploadingFiles.size > 0 && (
+              <div className="space-y-2">
+                {Array.from(uploadingFiles.entries()).map(([name, progress]) => (
+                  <div key={name}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="truncate">{name}</span>
+                      <span>{Math.round(progress)}%</span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div className="bg-primary h-2 rounded-full" style={{ width: `${progress}%` }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setUploadDialog(false)}>
+              <Button variant="outline" onClick={() => setUploadDialog(false)} disabled={uploadingFiles.size > 0}>
                 Cancel
               </Button>
-              <Button>
+              <Button onClick={handleUpload} disabled={uploadingFiles.size > 0}>
                 <Upload className="h-4 w-4 mr-2" />
-                Upload Document
+                {uploadingFiles.size > 0 ? "Uploading..." : `Upload ${uploadFiles.length} Document(s)`}
               </Button>
             </div>
           </div>

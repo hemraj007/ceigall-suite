@@ -166,49 +166,51 @@ const handleRenameFolder = async (folderId: string, newName: string) => {
 };
 ```
 
-### 3. Wire Up Upload Functionality
+### 3. ✅ Wire Up Upload Functionality (Commit: [current])
 
-**Current State:** Upload dialog exists but has no backend integration
+**Current State:** Upload workflow is fully integrated with the backend API.
 
 **Implementation Steps:**
 
 ```typescript
-const [uploadingFiles, setUploadingFiles] = useState<Map<string, number>>(new Map());
+const handleUpload = async () => {
+  // Guard against no files or no folder selected
+  if (uploadFiles.length === 0 || !uploadFolderId) return;
 
-const handleUpload = async (files: File[], metadata: any) => {
   try {
-    // Step 1: Get presigned URL for each file
-    for (const file of files) {
-      const uploadUrl = await getUploadURL({
+    // For each file, execute the 3-step upload process
+    for (const file of uploadFiles) {
+      // Step 1: Get presigned URL from our backend
+      const uploadUrlResponse = await getUploadURL({
         filename: file.name,
         file_size: file.size,
         mime_type: file.type,
-        folder_id: metadata.folder_id,
-        tags: metadata.tags,
-        confidentiality_level: metadata.confidentiality_level,
-        description: metadata.description,
+        folder_id: uploadFolderId,
+        tags: uploadTags.split(',').map(t => t.trim()).filter(Boolean),
+        confidentiality_level: uploadConfidentiality,
       });
 
-      // Step 2: Upload file to S3
+      // Step 2: Upload the file directly to S3 using the presigned URL
       const { etag, versionId } = await uploadFileToS3(
-        uploadUrl.presigned_url,
+        uploadUrlResponse.upload_url, // Use corrected field name
         file,
         (progress) => {
+          // Update progress state for UI
           setUploadingFiles(prev => new Map(prev).set(file.name, progress));
         }
       );
 
-      // Step 3: Confirm upload with backend
-      await confirmUpload(uploadUrl.upload_id, {
-        upload_id: uploadUrl.upload_id,
+      // Step 3: Confirm the upload with our backend
+      await confirmUpload(uploadUrlResponse.document_id, { // Use document_id
         s3_etag: etag,
         s3_version_id: versionId,
       });
     }
 
-    // Refresh documents
-    queryClient.invalidateQueries({ queryKey: ["dms-documents"] });
+    // On success, refresh data and close dialog
     toast({ title: "Files uploaded successfully" });
+    queryClient.invalidateQueries({ queryKey: ["dms-documents"] });
+    queryClient.invalidateQueries({ queryKey: ["dms-summary"] });
     setUploadDialog(false);
   } catch (error) {
     toast({ title: "Error", description: "Upload failed", variant: "destructive" });
