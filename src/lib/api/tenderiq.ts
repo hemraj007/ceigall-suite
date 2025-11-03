@@ -51,10 +51,10 @@ const transformTender = (apiTender: any, category: string, index: number): Tende
 
 export const fetchDailyTenders = async (): Promise<Tender[]> => {
   console.log('Fetching daily tenders from:', `${API_BASE_URL}/tenderiq/dailytenders`);
-  
+
   const token = localStorage.getItem('token');
   console.log('Auth token present:', !!token);
-  
+
   try {
     const response = await fetch(`${API_BASE_URL}/tenderiq/dailytenders`, {
       headers: {
@@ -82,7 +82,7 @@ export const fetchDailyTenders = async (): Promise<Tender[]> => {
       data.queries.forEach(query => {
         const category = query.query_name || 'Uncategorized';
         console.log(`Processing category: ${category}, tenders count: ${query.tenders?.length || 0}`);
-        
+
         if (query.tenders && Array.isArray(query.tenders)) {
           query.tenders.forEach(tender => {
             allTenders.push(transformTender(tender, category, tenderIndex++));
@@ -99,4 +99,37 @@ export const fetchDailyTenders = async (): Promise<Tender[]> => {
     console.error('Error in fetchDailyTenders:', error);
     throw error;
   }
+};
+
+/**
+ * Filter tenders by category (query_name)
+ * @param tenders - Array of tenders to filter
+ * @param category - Category/query_name to filter by
+ * @returns Filtered tenders matching the category
+ */
+export const filterTendersByCategory = (tenders: Tender[], category: string): Tender[] => {
+  if (category === "all" || !category) {
+    return tenders;
+  }
+  return tenders.filter(tender => tender.category === category);
+};
+
+/**
+ * Get all available categories from tenders
+ * @param tenders - Array of tenders
+ * @returns Array of unique categories
+ */
+export const getAvailableCategories = (tenders: Tender[]): string[] => {
+  const categories = new Set(tenders.map(t => t.category));
+  return Array.from(categories).sort();
+};
+
+/**
+ * Get all available locations from tenders
+ * @param tenders - Array of tenders
+ * @returns Array of unique locations
+ */
+export const getAvailableLocations = (tenders: Tender[]): string[] => {
+  const locations = new Set(tenders.map(t => t.location).filter(loc => loc && loc !== 'N/A'));
+  return Array.from(locations).sort();
 };

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Search, Filter, RefreshCw, ExternalLink, MessageSquare, MapPin, Calendar, IndianRupee, Loader2 } from "lucide-react";
 import { Tender } from "@/lib/types/tenderiq";
-import { fetchDailyTenders } from "@/lib/api/tenderiq";
+import { fetchDailyTenders, filterTendersByCategory, getAvailableCategories, getAvailableLocations } from "@/lib/api/tenderiq";
 import { useToast } from "@/hooks/use-toast";
 
 interface LiveTendersProps {
@@ -18,7 +18,7 @@ const LiveTenders = ({ onBack }: LiveTendersProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("all");
-  const [minValue, setMinValue] = useState("");
+  const [minValue, setMinValue] = useState("300");
   const [maxValue, setMaxValue] = useState("");
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,14 +45,14 @@ const LiveTenders = ({ onBack }: LiveTendersProps) => {
 
   // Extract unique categories and locations
   const categories = useMemo(() => {
-    const cats = Array.from(new Set(tenders.map(t => t.category)));
+    const cats = getAvailableCategories(tenders);
     return ["all", ...cats];
-  }, []);
+  }, [tenders]);
 
   const locations = useMemo(() => {
-    const locs = Array.from(new Set(tenders.map(t => t.location)));
+    const locs = getAvailableLocations(tenders);
     return ["all", ...locs];
-  }, []);
+  }, [tenders]);
 
   // Parse tender value to number
   const parseValue = (value: string): number | null => {
