@@ -70,8 +70,8 @@ export default function TenderDetailsUI({
                 <div className="flex items-start gap-3">
                   <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium">Tender ID</p>
-                    <p className="text-sm text-muted-foreground">{tender.id}</p>
+                    <p className="text-sm font-medium">Tender No.</p>
+                    <p className="text-sm text-muted-foreground">{tender.tenderNo || tender.id}</p>
                   </div>
                 </div>
 
@@ -80,7 +80,7 @@ export default function TenderDetailsUI({
                   <div className="flex-1">
                     <p className="text-sm font-medium">Tender Value</p>
                     <p className="text-lg font-bold text-primary">
-                      ₹{(tender.value / 10000000).toFixed(2)} Cr
+                      {tender.value ? `₹${(tender.value / 10000000).toFixed(2)} Cr` : "Ref Document"}
                     </p>
                   </div>
                 </div>
@@ -116,7 +116,7 @@ export default function TenderDetailsUI({
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">EMD</p>
-                    <p className="text-sm font-semibold">₹{(tender.emd / 100000).toFixed(2)} L</p>
+                    <p className="text-sm font-semibold">{tender.emd ? `₹${(tender.emd / 100000).toFixed(2)} L` : "N/A"}</p>
                   </div>
                 </div>
 
@@ -220,7 +220,7 @@ export default function TenderDetailsUI({
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" onClick={() => window.open(doc.url, '_blank')} disabled={!doc.url}>
                           View
                         </Button>
                         {!doc.isAIGenerated && (

@@ -1,5 +1,5 @@
 export interface Tender {
-  id: number;
+  id: string;
   organization: string;
   tdrNumber: string;
   description: string;
@@ -61,21 +61,24 @@ export interface EvaluationResult {
 export interface TenderDocument {
   id: string;
   name: string;
-  type: "pdf" | "doc" | "excel";
+  type: "pdf" | "doc" | "excel" | "other";
+  url: string;
+  description?: string | null;
+  size?: string | null;
   pages?: number;
   isAIGenerated?: boolean;
 }
 
 export interface TenderDetailsType {
   id: string;
+  tenderNo?: string;
   title: string;
   authority: string;
-  value: number;
+  value: number | null; // Can be "Ref Document"
   dueDate: string;
   status: "live" | "won" | "lost" | "submitted" | "under evaluation";
   category: string;
-  emd: number;
-  bidSecurity: number;
+  emd: number | null;
   location: string;
   length?: string;
   costPerKm?: number;

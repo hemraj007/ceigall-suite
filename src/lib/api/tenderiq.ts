@@ -1,5 +1,36 @@
 import { API_BASE_URL } from '@/lib/config/api';
-import { Tender, TenderDetailsType } from '@/lib/types/tenderiq';
+import { Tender, TenderDetailsType, TenderDocument } from '@/lib/types/tenderiq';
+
+// Based on OpenAPI spec
+interface ScrapedTenderFile {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_description?: string | null;
+  file_size?: string | null;
+}
+
+interface ScrapedTender {
+  id: string; // uuid
+  tender_id_str: string;
+  tender_name: string;
+  tender_url: string;
+  drive_url?: string | null;
+  city: string;
+  summary: string;
+  value: string;
+  due_date: string;
+  tdr?: string | null;
+  tendering_authority?: string | null;
+  tender_no?: string | null;
+  state?: string | null;
+  emd?: string | null;
+  tender_value?: string | null;
+  publish_date?: string | null;
+  last_date_of_bid_submission?: string | null;
+  files: ScrapedTenderFile[];
+  [key: string]: any; // Allow other properties
+}
 
 interface TenderApiResponse {
   id: string;
@@ -32,11 +63,11 @@ interface TenderApiResponse {
 }
 
 // Transform API response to frontend format
-const transformTender = (apiTender: any, category: string, index: number): Tender => {
+const transformTender = (apiTender: ScrapedTender, category: string): Tender => {
   console.log('Transforming tender:', { apiTender, category });
   
   return {
-    id: index,
+    id: apiTender.id,
     organization: apiTender.tendering_authority || apiTender.tender_name || 'Unknown',
     tdrNumber: apiTender.tdr || apiTender.tender_id_str || 'N/A',
     description: apiTender.summary || apiTender.tender_brief || apiTender.tender_details || 'No description',
@@ -47,6 +78,33 @@ const transformTender = (apiTender: any, category: string, index: number): Tende
     scrapedDate: new Date().toISOString().split('T')[0],
     driveUrl: apiTender.drive_url || apiTender.tender_url || undefined,
   };
+};
+
+const parseCurrency = (value: string | null | undefined): number | null => {
+  if (!value || typeof value !== 'string' || value.toLowerCase().includes('ref document')) {
+    return null;
+  }
+  // Remove currency symbols and commas
+  const cleanedValue = value.replace(/₹/g, '').replace(/,/g, '').trim();
+  const match = cleanedValue.match(/([\d.]+)\s*(cr|crore|lakh|l)/i);
+
+  if (match) {
+    const num = parseFloat(match[1]);
+    const unit = match[2].toLowerCase();
+    if (unit === 'cr' || unit === 'crore') {
+      return num * 10000000;
+    }
+    if (unit === 'lakh' || unit === 'l') {
+      return num * 100000;
+    }
+  }
+  
+  const numOnly = parseFloat(cleanedValue);
+  if (!isNaN(numOnly)) {
+    return numOnly;
+  }
+
+  return null;
 };
 
 export const fetchDailyTenders = async (): Promise<Tender[]> => {
@@ -76,7 +134,6 @@ export const fetchDailyTenders = async (): Promise<Tender[]> => {
 
     // Extract all tenders from all queries
     const allTenders: Tender[] = [];
-    let tenderIndex = 1;
 
     if (data.queries && Array.isArray(data.queries)) {
       data.queries.forEach(query => {
@@ -85,7 +142,7 @@ export const fetchDailyTenders = async (): Promise<Tender[]> => {
 
         if (query.tenders && Array.isArray(query.tenders)) {
           query.tenders.forEach(tender => {
-            allTenders.push(transformTender(tender, category, tenderIndex++));
+            allTenders.push(transformTender(tender, category));
           });
         }
       });
@@ -234,8 +291,8 @@ export const fetchFilteredTenders = async (params: {
     console.log('Filtered tenders response:', data);
 
     // Transform tenders if needed
-    const transformedTenders: Tender[] = (data.tenders || []).map((t: any, index: number) => ({
-      id: t.id || index,
+    const transformedTenders: Tender[] = (data.tenders || []).map((t: ScrapedTender) => ({
+      id: t.id,
       organization: t.tendering_authority || t.tender_name || 'Unknown',
       tdrNumber: t.tdr || t.tender_id_str || 'N/A',
       description: t.summary || t.tender_brief || t.tender_details || 'No description',
@@ -283,12 +340,45 @@ export const fetchTenderById = async (id: string): Promise<TenderDetailsType> =>
       throw new Error(`Failed to fetch tender details: ${response.status} ${errorText}`);
     }
 
-    const data = await response.json();
+    const data: ScrapedTender = await response.json();
     console.log('Tender details API response:', data);
     
-    // The API response is assumed to match the TenderDetailsType.
-    // Add transformation logic here if the API shape is different.
-    return data as TenderDetailsType;
+    // Transform the backend response to the frontend TenderDetailsType
+    const transformDocuments = (files: ScrapedTenderFile[]): TenderDocument[] => {
+      return files.map(file => {
+        const name = file.file_name;
+        let type: TenderDocument['type'] = 'other';
+        if (name.endsWith('.pdf')) type = 'pdf';
+        else if (name.endsWith('.doc') || name.endsWith('.docx')) type = 'doc';
+        else if (name.endsWith('.xls') || name.endsWith('.xlsx')) type = 'excel';
+        
+        return {
+          id: file.id,
+          name: name,
+          type: type,
+          url: file.file_url,
+          description: file.file_description,
+          size: file.file_size,
+        };
+      });
+    };
+
+    const transformedTender: TenderDetailsType = {
+      id: data.id,
+      tenderNo: data.tender_no || data.tdr || data.tender_id_str,
+      title: data.tender_name,
+      authority: data.tendering_authority || 'N/A',
+      value: parseCurrency(data.value || data.tender_value),
+      dueDate: data.due_date || data.last_date_of_bid_submission || 'N/A',
+      status: 'live', // Default status, not provided by this endpoint
+      category: data.query_name || 'Uncategorized', // Assuming query_name is category
+      emd: parseCurrency(data.emd),
+      location: data.city || data.state || 'N/A',
+      ePublishedDate: data.publish_date || new Date().toISOString(),
+      documents: data.files ? transformDocuments(data.files) : [],
+    };
+
+    return transformedTender;
   } catch (error) {
     console.error(`Error in fetchTenderById for id ${id}:`, error);
     throw error;
