@@ -6,8 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Search, Filter, RefreshCw, ExternalLink, MessageSquare, MapPin, Calendar, IndianRupee, Loader2 } from "lucide-react";
 import { Tender } from "@/lib/types/tenderiq";
-import { getAvailableCategories, getAvailableLocations } from "@/lib/api/tenderiq";
-import { filterTenders, groupTendersByCategory, getValueColor, parseTenderValue } from "@/lib/utils/tender-filters";
+import { filterTenders, groupTendersByCategory, getAvailableCategories, getAvailableLocations } from "@/lib/utils/tender-filters";
 import { useLiveFilters } from "@/hooks/useLiveFilters";
 import DateSelector from "./DateSelector";
 
@@ -206,26 +205,23 @@ const LiveTenders = ({ onBack }: LiveTendersProps) => {
                         </div>
                       </div>
 
-                      {/* Content */}
                       <div className="flex-1 space-y-3">
                         <div>
-                          <h3 className="text-lg font-bold text-foreground">{tender.organization}</h3>
+                          <h3 className="text-lg font-bold text-foreground">{tender.title}</h3>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                             <MapPin className="h-4 w-4" />
                             <span>{tender.location}</span>
                           </div>
                           <div className="flex items-center gap-2 mt-1">
-                            <p className="text-sm font-mono bg-primary/10 text-primary px-2 py-1 rounded inline-block">{tender.tdrNumber}</p>
+                            <p className="text-sm font-mono bg-primary/10 text-primary px-2 py-1 rounded inline-block">{tender.authority}</p>
                           </div>
                         </div>
-
-                        <p className="text-sm text-foreground leading-relaxed">{tender.description}</p>
 
                         <div className="flex flex-wrap items-center gap-4 text-sm">
                           <div className="flex items-center gap-1.5 bg-muted/50 px-3 py-1.5 rounded-md">
                             <IndianRupee className="h-4 w-4 text-primary" />
                             <span className="font-medium">Tender Value:</span>
-                            <span className={getValueColor(tender.tenderValue)}>{tender.tenderValue}</span>
+                            <span className="text-green-600 font-semibold">{tender.value}</span>
                           </div>
                           <div className="flex items-center gap-1.5 bg-muted/50 px-3 py-1.5 rounded-md">
                             <Calendar className="h-4 w-4 text-orange-600" />
@@ -259,7 +255,7 @@ const LiveTenders = ({ onBack }: LiveTendersProps) => {
         </div>
       )}
 
-      {!loading && filteredTenders.length === 0 && (
+      {!isLoading && filteredTenders.length === 0 && (
         <Card className="p-12 text-center">
           <p className="text-muted-foreground">No tenders found matching your filters.</p>
         </Card>

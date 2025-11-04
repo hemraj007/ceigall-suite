@@ -1,66 +1,5 @@
 import { API_BASE_URL } from '@/lib/config/api';
-import { Tender, TenderDetailsType, TenderDocument } from '@/lib/types/tenderiq';
-
-// Based on OpenAPI spec
-interface ScrapedTenderFile {
-  id: string;
-  file_name: string;
-  file_url: string;
-  file_description?: string | null;
-  file_size?: string | null;
-}
-
-interface ScrapedTender {
-  id: string; // uuid
-  tender_id_str: string;
-  tender_name: string;
-  tender_url: string;
-  drive_url?: string | null;
-  city: string;
-  summary: string;
-  value: string;
-  due_date: string;
-  tdr?: string | null;
-  tendering_authority?: string | null;
-  tender_no?: string | null;
-  state?: string | null;
-  emd?: string | null;
-  tender_value?: string | null;
-  publish_date?: string | null;
-  last_date_of_bid_submission?: string | null;
-  files: ScrapedTenderFile[];
-  [key: string]: any; // Allow other properties
-}
-
-interface TenderApiResponse {
-  id: string;
-  run_at: string;
-  date_str: string;
-  name: string;
-  contact: string;
-  no_of_new_tenders: string;
-  company: string;
-  queries: {
-    id: string;
-    query_name: string;
-    number_of_tenders: string;
-    tenders: {
-      id: string;
-      tender_id_str: string;
-      tender_name: string;
-      tender_url: string;
-      drive_url: string;
-      city: string;
-      summary: string;
-      value: string;
-      due_date: string;
-      tdr: string;
-      tendering_authority: string;
-      tender_no: string;
-      [key: string]: any;
-    }[];
-  }[];
-}
+import { Document, Tender, TenderDetailsType, TenderDocument, ScrapedTenderFile, ScrapedTender, TenderApiResponse, AvailableDate, FilteredTendersResponse } from '@/lib/types/tenderiq';
 
 // Transform API response to frontend format
 const transformTender = (apiTender: ScrapedTender, category: string): Tender => {
@@ -68,15 +7,18 @@ const transformTender = (apiTender: ScrapedTender, category: string): Tender => 
   
   return {
     id: apiTender.id,
-    organization: apiTender.tendering_authority || apiTender.tender_name || 'Unknown',
-    tdrNumber: apiTender.tdr || apiTender.tender_id_str || 'N/A',
-    description: apiTender.summary || apiTender.tender_brief || apiTender.tender_details || 'No description',
-    tenderValue: apiTender.value || apiTender.tender_value || 'Ref Document',
+    title: apiTender.tender_name,
+    authority: apiTender.tendering_authority || 'Unknown',
+    value: parseCurrency(apiTender.value || apiTender.tender_value) || 0,
     dueDate: apiTender.due_date ? apiTender.due_date.trim() : 'N/A',
-    location: apiTender.city || apiTender.state || 'N/A',
+    status: 'live',
     category: category.trim(),
-    scrapedDate: new Date().toISOString().split('T')[0],
-    driveUrl: apiTender.drive_url || apiTender.tender_url || undefined,
+    ePublishedDate: apiTender.publish_date || new Date().toISOString(),
+    bidSecurity: 0, // Not in ScrapedTender
+    emd: parseCurrency(apiTender.emd) || 0,
+    location: apiTender.city || apiTender.state || 'N/A',
+    progressPct: 0,
+    documents: [], // Not in ScrapedTender
   };
 };
 
@@ -158,59 +100,6 @@ export const fetchDailyTenders = async (): Promise<Tender[]> => {
   }
 };
 
-/**
- * Filter tenders by category (query_name)
- * @param tenders - Array of tenders to filter
- * @param category - Category/query_name to filter by
- * @returns Filtered tenders matching the category
- */
-export const filterTendersByCategory = (tenders: Tender[], category: string): Tender[] => {
-  if (category === "all" || !category) {
-    return tenders;
-  }
-  return tenders.filter(tender => tender.category === category);
-};
-
-/**
- * Get all available categories from tenders
- * @param tenders - Array of tenders
- * @returns Array of unique categories
- */
-export const getAvailableCategories = (tenders: Tender[]): string[] => {
-  const categories = new Set(tenders.map(t => t.category));
-  return Array.from(categories).sort();
-};
-
-/**
- * Get all available locations from tenders
- * @param tenders - Array of tenders
- * @returns Array of unique locations
- */
-export const getAvailableLocations = (tenders: Tender[]): string[] => {
-  const locations = new Set(tenders.map(t => t.location).filter(loc => loc && loc !== 'N/A'));
-  return Array.from(locations).sort();
-};
-
-export interface AvailableDate {
-  date: string;
-  date_str: string;
-  run_at: string;
-  tender_count: number;
-  is_latest: boolean;
-}
-
-export interface FilteredTendersResponse {
-  tenders: Tender[];
-  total_count: number;
-  filtered_by: {
-    date?: string;
-    date_range?: string;
-    include_all_dates?: boolean;
-    category?: string;
-    location?: string;
-  };
-  available_dates: string[];
-}
 
 /**
  * Fetch available scrape dates from the backend
@@ -291,18 +180,7 @@ export const fetchFilteredTenders = async (params: {
     console.log('Filtered tenders response:', data);
 
     // Transform tenders if needed
-    const transformedTenders: Tender[] = (data.tenders || []).map((t: ScrapedTender) => ({
-      id: t.id,
-      organization: t.tendering_authority || t.tender_name || 'Unknown',
-      tdrNumber: t.tdr || t.tender_id_str || 'N/A',
-      description: t.summary || t.tender_brief || t.tender_details || 'No description',
-      tenderValue: t.value || t.tender_value || 'Ref Document',
-      dueDate: t.due_date ? t.due_date.trim() : 'N/A',
-      location: t.city || t.state || 'N/A',
-      category: t.query_name || t.category || 'Uncategorized',
-      scrapedDate: t.date || t.scraped_date || new Date().toISOString().split('T')[0],
-      driveUrl: t.drive_url || t.tender_url || undefined,
-    }));
+    const transformedTenders: Tender[] = (data.tenders || []).map((t: ScrapedTender) => transformTender(t, t.category || 'Uncategorized'));
 
     return {
       tenders: transformedTenders,

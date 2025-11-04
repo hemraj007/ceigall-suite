@@ -1,30 +1,4 @@
-// Type definitions
-export interface Document {
-  id: string;
-  name: string;
-  type: 'pdf' | 'doc' | 'excel';
-  pages?: number;
-  isAIGenerated?: boolean;
-}
-
-export interface Tender {
-  id: string;
-  title: string;
-  authority: string;
-  value: number;              // in rupees
-  dueDate: string;            // ISO date: "2025-12-15"
-  status: 'live' | 'analyzed' | 'synopsis' | 'evaluated' | 'won' | 'lost' | 'pending';
-  category: string;
-  ePublishedDate: string;     // ISO date
-  bidSecurity: number;        // in rupees
-  emd: number;                // Earnest Money Deposit, in rupees
-  location: string;
-  length?: string;            // e.g., "120 km"
-  costPerKm?: number;
-  progressPct: number;        // 0-100
-  documents: Document[];
-  riskLevel?: 'high' | 'medium' | 'low';
-}
+import { Tender } from '@/lib/types/tenderiq';
 
 // Sample tender data
 const sampleTenders: Tender[] = [

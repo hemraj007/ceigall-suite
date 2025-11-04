@@ -1,37 +1,11 @@
-import { Tender } from '@/lib/types/tenderiq';
+import { Tender, TenderFilterParams } from '@/lib/types/tenderiq';
 
 /**
- * Parse tender value string to number
- * @param value - Tender value string (e.g., "30 Cr", "Ref Document")
- * @returns Parsed numeric value or null if not parseable
+ * Filter tenders based on multiple criteria
+ * @param tenders - Array of tenders to filter
+ * @param params - Filter parameters
+ * @returns Filtered array of tenders
  */
-export const parseTenderValue = (value: string): number | null => {
-  if (value === "Ref Document") return null;
-  const match = value.match(/[\d.]+/);
-  return match ? parseFloat(match[0]) : null;
-};
-
-/**
- * Get color class for tender value display
- * @param value - Tender value string
- * @returns Tailwind color class
- */
-export const getValueColor = (value: string): string => {
-  const numValue = parseTenderValue(value);
-  if (numValue === null) return "text-muted-foreground";
-  if (numValue >= 30) return "text-green-600 font-semibold";
-  if (numValue >= 10) return "text-blue-600 font-semibold";
-  return "text-muted-foreground";
-};
-
-export interface TenderFilterParams {
-  searchTerm?: string;
-  category?: string;
-  location?: string;
-  minValue?: number | null;
-  maxValue?: number | null;
-}
-
 /**
  * Filter tenders based on multiple criteria
  * @param tenders - Array of tenders to filter
@@ -47,9 +21,8 @@ export const filterTenders = (
     if (params.searchTerm) {
       const search = params.searchTerm.toLowerCase();
       const matchesSearch =
-        tender.organization.toLowerCase().includes(search) ||
-        tender.tdrNumber.toLowerCase().includes(search) ||
-        tender.description.toLowerCase().includes(search) ||
+        tender.title.toLowerCase().includes(search) ||
+        tender.authority.toLowerCase().includes(search) ||
         tender.category.toLowerCase().includes(search);
 
       if (!matchesSearch) return false;
@@ -66,18 +39,48 @@ export const filterTenders = (
     }
 
     // Value range filter
-    const tenderVal = parseTenderValue(tender.tenderValue);
-    if (tenderVal !== null) {
-      if (params.minValue !== undefined && params.minValue !== null) {
-        if (tenderVal < params.minValue) return false;
-      }
-      if (params.maxValue !== undefined && params.maxValue !== null) {
-        if (tenderVal > params.maxValue) return false;
-      }
+    if (params.minValue !== undefined && params.minValue !== null) {
+      if (tender.value < params.minValue) return false;
+    }
+    if (params.maxValue !== undefined && params.maxValue !== null) {
+      if (tender.value > params.maxValue) return false;
     }
 
     return true;
   });
+};
+
+/**
+ * Filter tenders by category (query_name)
+ * @param tenders - Array of tenders to filter
+ * @param category - Category/query_name to filter by
+ * @returns Filtered tenders matching the category
+ */
+export const filterTendersByCategory = (tenders: Tender[], category: string): Tender[] => {
+  if (category === "all" || !category) {
+    return tenders;
+  }
+  return tenders.filter(tender => tender.category === category);
+};
+
+/**
+ * Get all available categories from tenders
+ * @param tenders - Array of tenders
+ * @returns Array of unique categories
+ */
+export const getAvailableCategories = (tenders: Tender[]): string[] => {
+  const categories = new Set(tenders.map(t => t.category));
+  return Array.from(categories).sort();
+};
+
+/**
+ * Get all available locations from tenders
+ * @param tenders - Array of tenders
+ * @returns Array of unique locations
+ */
+export const getAvailableLocations = (tenders: Tender[]): string[] => {
+  const locations = new Set(tenders.map(t => t.location).filter(loc => loc && loc !== 'N/A'));
+  return Array.from(locations).sort();
 };
 
 /**

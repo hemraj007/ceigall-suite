@@ -1,15 +1,31 @@
+
+export interface Document {
+  id: string;
+  name: string;
+  type: 'pdf' | 'doc' | 'excel';
+  pages?: number;
+  isAIGenerated?: boolean;
+}
+
 export interface Tender {
   id: string;
-  organization: string;
-  tdrNumber: string;
-  description: string;
-  tenderValue: string;
-  dueDate: string;
-  location: string;
+  title: string;
+  authority: string;
+  value: number;              // in rupees
+  dueDate: string;            // ISO date: "2025-12-15"
+  status: 'live' | 'analyzed' | 'synopsis' | 'evaluated' | 'won' | 'lost' | 'pending';
   category: string;
-  scrapedDate: string;
-  driveUrl?: string;
+  ePublishedDate: string;     // ISO date
+  bidSecurity: number;        // in rupees
+  emd: number;                // Earnest Money Deposit, in rupees
+  location: string;
+  length?: string;            // e.g., "120 km"
+  costPerKm?: number;
+  progressPct: number;        // 0-100
+  documents: Document[];
+  riskLevel?: 'high' | 'medium' | 'low';
 }
+
 
 export interface HistoryTender {
   id: number;
@@ -23,6 +39,95 @@ export interface HistoryTender {
   category: string;
   starred: boolean;
   progress: number;
+}
+
+export interface ScrapedTenderFile {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_description?: string | null;
+  file_size?: string | null;
+}
+
+export interface ScrapedTender {
+  id: string; // uuid
+  tender_id_str: string;
+  tender_name: string;
+  tender_url: string;
+  drive_url?: string | null;
+  city: string;
+  summary: string;
+  value: string;
+  due_date: string;
+  tdr?: string | null;
+  tendering_authority?: string | null;
+  tender_no?: string | null;
+  state?: string | null;
+  emd?: string | null;
+  tender_value?: string | null;
+  publish_date?: string | null;
+  last_date_of_bid_submission?: string | null;
+  files: ScrapedTenderFile[];
+  [key: string]: any; // Allow other properties
+}
+
+export interface TenderApiResponse {
+  id: string;
+  run_at: string;
+  date_str: string;
+  name: string;
+  contact: string;
+  no_of_new_tenders: string;
+  company: string;
+  queries: {
+    id: string;
+    query_name: string;
+    number_of_tenders: string;
+    tenders: {
+      id: string;
+      tender_id_str: string;
+      tender_name: string;
+      tender_url: string;
+      drive_url: string;
+      city: string;
+      summary: string;
+      value: string;
+      due_date: string;
+      tdr: string;
+      tendering_authority: string;
+      tender_no: string;
+      [key: string]: any;
+    }[];
+  }[];
+}
+
+export interface AvailableDate {
+  date: string;
+  date_str: string;
+  run_at: string;
+  tender_count: number;
+  is_latest: boolean;
+}
+
+export interface FilteredTendersResponse {
+  tenders: Tender[];
+  total_count: number;
+  filtered_by: {
+    date?: string;
+    date_range?: string;
+    include_all_dates?: boolean;
+    category?: string;
+    location?: string;
+  };
+  available_dates: string[];
+}
+
+export interface TenderFilterParams {
+  searchTerm?: string;
+  category?: string;
+  location?: string;
+  minValue?: number | null;
+  maxValue?: number | null;
 }
 
 export interface ComparisonClause {
