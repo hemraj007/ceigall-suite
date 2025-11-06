@@ -191,3 +191,34 @@ export interface TenderDetailsType {
   documents: TenderDocument[];
   riskLevel?: "Low" | "Medium" | "High";
 }
+
+export type TenderActionType =
+  | "toggle_wishlist"
+  | "toggle_favorite"
+  | "toggle_archive"
+  | "update_status"
+  | "update_review_status";
+
+export type TenderStatusEnum =
+  | "New"
+  | "Reviewed"
+  | "Shortlisted"
+  | "Bid_Preparation"
+  | "Submitted"
+  | "Won"
+  | "Lost"
+  | "Not_Interested"
+  | "Pending_Results";
+
+export type ReviewStatusEnum = "Not_Reviewed" | "Reviewed" | "Shortlisted";
+
+export interface TenderActionPayload {
+  status?: TenderStatusEnum;
+  review_status?: ReviewStatusEnum;
+  notes?: string;
+}
+
+export interface TenderActionRequest {
+  action: TenderActionType;
+  payload?: TenderActionPayload;
+}

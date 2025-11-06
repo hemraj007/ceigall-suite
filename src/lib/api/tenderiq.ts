@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '@/lib/config/api';
 import { getAuthHeaders } from '@/lib/api/authHelper';
-import { Document, Tender, TenderDetailsType, TenderDocument, ScrapedTenderFile, ScrapedTender, TenderApiResponse, AvailableDate, FilteredTendersResponse } from '@/lib/types/tenderiq';
+import { Document, Tender, TenderDetailsType, TenderDocument, ScrapedTenderFile, ScrapedTender, TenderApiResponse, AvailableDate, FilteredTendersResponse, TenderActionRequest } from '@/lib/types/tenderiq';
 
 // Transform API response to frontend format
 const transformTender = (apiTender: ScrapedTender, category: string): Tender => {
@@ -278,6 +278,100 @@ export const fetchTenderById = async (id: string): Promise<TenderDetailsType> =>
     return transformedTender;
   } catch (error) {
     console.error(`Error in fetchTenderById for id ${id}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch all wishlisted tenders.
+ * @returns Array of wishlisted tenders.
+ */
+export const fetchWishlistedTenders = async (): Promise<Tender[]> => {
+  const url = `${API_BASE_URL}/tenderiq/wishlist`;
+  console.log('Fetching wishlisted tenders from:', url);
+  try {
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    if (!response.ok) {
+      throw new Error('Failed to fetch wishlisted tenders');
+    }
+    const data: ScrapedTender[] = await response.json();
+    return data.map(tender => transformTender(tender, tender.query_name || 'Uncategorized'));
+  } catch (error) {
+    console.error('Error fetching wishlisted tenders:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch all archived tenders.
+ * @returns Array of archived tenders.
+ */
+export const fetchArchivedTenders = async (): Promise<Tender[]> => {
+  const url = `${API_BASE_URL}/tenderiq/archived`;
+  console.log('Fetching archived tenders from:', url);
+  try {
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    if (!response.ok) {
+      throw new Error('Failed to fetch archived tenders');
+    }
+    const data: ScrapedTender[] = await response.json();
+    return data.map(tender => transformTender(tender, tender.query_name || 'Uncategorized'));
+  } catch (error) {
+    console.error('Error fetching archived tenders:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch all favorite tenders.
+ * @returns Array of favorite tenders.
+ */
+export const fetchFavoriteTenders = async (): Promise<Tender[]> => {
+  const url = `${API_BASE_URL}/tenderiq/favourite`;
+  console.log('Fetching favorite tenders from:', url);
+  try {
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    if (!response.ok) {
+      throw new Error('Failed to fetch favorite tenders');
+    }
+    const data: ScrapedTender[] = await response.json();
+    return data.map(tender => transformTender(tender, tender.query_name || 'Uncategorized'));
+  } catch (error) {
+    console.error('Error fetching favorite tenders:', error);
+    throw error;
+  }
+};
+
+/**
+ * Perform an action on a tender (e.g., wishlist, archive).
+ * @param tenderId The ID of the tender.
+ * @param action The action to perform.
+ */
+export const performTenderAction = async (
+  tenderId: string,
+  action: TenderActionRequest
+): Promise<void> => {
+  const url = `${API_BASE_URL}/tenderiq/tenders/${tenderId}/actions`;
+  console.log(`Performing action on tender ${tenderId}:`, action);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(action),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to perform action on tender: ${response.status} ${errorText}`);
+    }
+    
+    console.log(`Action ${action.action} on tender ${tenderId} successful.`);
+  } catch (error) {
+    console.error(`Error in performTenderAction for tender ${tenderId}:`, error);
     throw error;
   }
 };

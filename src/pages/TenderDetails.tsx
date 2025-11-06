@@ -6,8 +6,8 @@ import { fetchTenderById } from '@/lib/api/tenderiq';
 import { TenderDetailsType } from '@/lib/types/tenderiq';
 import TenderDetailsUI from '@/components/tenderiq/TenderDetailsUI';
 import { Button } from '@/components/ui/button';
-import { addToWishlist, fetchWishlist } from '@/lib/api/wishlist';
-import { WishlistItem } from '@/lib/types/wishlist';
+import { performTenderAction, fetchWishlistedTenders } from '@/lib/api/tenderiq';
+import { Tender } from '@/lib/types/tenderiq';
 
 export default function TenderDetails() {
   const { id } = useParams<{ id: string }>();
@@ -21,25 +21,24 @@ export default function TenderDetails() {
     enabled: !!id,
   });
 
-  const { data: wishlist } = useQuery<WishlistItem[], Error>({
+  const { data: wishlist } = useQuery<Tender[], Error>({
     queryKey: ['wishlist'],
-    queryFn: async () => (await fetchWishlist()).items,
+    queryFn: fetchWishlistedTenders,
   });
 
   const isWishlisted = wishlist?.some((item) => item.id === id) ?? false;
 
   const handleAddToWishlist = async () => {
     if (!tender) return;
-    if (isWishlisted) {
-      toast({ title: 'Already in wishlist' });
-      return;
-    }
     try {
-      await addToWishlist(tender.id);
-      toast({ title: 'Added to wishlist', description: 'Tender saved successfully' });
+      await performTenderAction(tender.id, { action: 'toggle_wishlist' });
+      toast({
+        title: isWishlisted ? 'Removed from wishlist' : 'Added to wishlist',
+        description: 'Tender wishlist updated successfully',
+      });
       queryClient.invalidateQueries({ queryKey: ['wishlist'] });
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to add to wishlist', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Failed to update wishlist', variant: 'destructive' });
     }
   };
   
