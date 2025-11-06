@@ -26,25 +26,10 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useAnalyzeTender } from '@/hooks/useAnalyzeTender';
-import { fetchTenderById } from '@/lib/api/tenderiq';
+import { useQuery } from '@tanstack/react-query';
+import { fetchTenderById, fetchTenderAnalysis } from '@/lib/api/tenderiq';
+import { TenderAnalysisResult } from '@/lib/types/tenderiq';
 import { useState, useEffect } from 'react';
-interface AnalysisOnePager {
-  project_overview: string;
-  eligibility_highlights: string[];
-  important_dates: string[];
-  financial_requirements: string[];
-  risk_analysis: {
-    summary: string;
-  };
-}
-
-interface TenderAnalysisResponse {
-  one_pager_json: AnalysisOnePager | null;
-  scope_of_work_json: any | null;
-  data_sheet_json: any | null;
-  tenderInfo?: any;
-}
 
 export default function AnalyzeTender() {
   const { id } = useParams();
@@ -53,11 +38,14 @@ export default function AnalyzeTender() {
   const [tenderLoading, setTenderLoading] = useState(true);
   const [tenderError, setTenderError] = useState<string | null>(null);
 
-  // Initialize analysis hook
-  const analysis = useAnalyzeTender({
-    tenderId: id || '',
-    autoStartAnalysis: true,
-    pollInterval: 2000,
+  const {
+    data: analysisResults,
+    isLoading: isAnalysisLoading,
+    isError: isAnalysisError,
+  } = useQuery<TenderAnalysisResult, Error>({
+    queryKey: ['tenderAnalysis', id],
+    queryFn: () => fetchTenderAnalysis(id!),
+    enabled: !!id,
   });
 
   // Fetch tender details on mount
@@ -85,9 +73,6 @@ export default function AnalyzeTender() {
     loadTender();
   }, [id]);
 
-  const analysisResults = analysis.analysisResults as TenderAnalysisResponse | null;
-  const isAnalysisComplete = analysis.analysisStatus?.status === 'completed' || analysisResults;
-
   return (
     <div className="min-h-screen bg-background">
       <div className="p-8 space-y-6 max-w-[1800px] mx-auto">
@@ -105,11 +90,11 @@ export default function AnalyzeTender() {
                   ? 'Loading tender details...'
                   : tender
                   ? tender.title
-                  : analysisResults?.tenderInfo.title || 'Analysis Results'}
+                  : 'Analysis Results'}
               </p>
             </div>
           </div>
-          {isAnalysisComplete && (
+          {analysisResults && (
             <div className="flex gap-2">
               <Button variant="outline">
                 <Download className="h-4 w-4 mr-2" />
@@ -141,24 +126,25 @@ export default function AnalyzeTender() {
 
 
         {/* Analysis Loading Progress */}
-        {(analysis.isPolling || analysis.analysisStatus?.status === 'in_progress') && (
+        {isAnalysisLoading && (
           <Card className="p-8">
             <div className="flex flex-col items-center space-y-4">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
-                <FileText className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold">AI Analysis in Progress</h3>
-              <p className="text-sm text-muted-foreground">
-                {analysis.currentStep || 'Processing tender documents...'}
-              </p>
-              <Progress value={analysis.progress} className="w-full max-w-md" />
-              <p className="text-xs text-muted-foreground">{analysis.progress}% Complete</p>
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-muted-foreground">Analyzing tender...</p>
             </div>
           </Card>
         )}
 
+        {isAnalysisError && (
+          <Card className="p-6 border-red-200 bg-red-50">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              <p className="text-red-800">Failed to load analysis. The analysis might still be in progress or has failed.</p>
+            </div>
+          </Card>
+        )}
         {/* Analysis Results */}
-        {isAnalysisComplete && analysisResults && analysisResults.one_pager_json && (
+        {analysisResults && analysisResults.one_pager_json && (
           <div className="space-y-6">
             {/* Project Overview */}
             <Card className="p-6 space-y-4">

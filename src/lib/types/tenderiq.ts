@@ -222,3 +222,26 @@ export interface TenderActionRequest {
   action: TenderActionType;
   payload?: TenderActionPayload;
 }
+
+export interface AnalysisOnePager {
+  project_overview: string;
+  eligibility_highlights: string[];
+  important_dates: string[];
+  financial_requirements: string[];
+  risk_analysis: {
+    summary: string;
+  };
+}
+
+export interface TenderAnalysisResult {
+  id: string;
+  tender_id: string;
+  status: 'completed' | 'in_progress' | 'failed' | 'queued';
+  status_message: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  one_pager_json: AnalysisOnePager | null;
+  scope_of_work_json: any | null; // Type can be refined later if structure is known
+  data_sheet_json: any | null; // Type can be refined later if structure is known
+}
